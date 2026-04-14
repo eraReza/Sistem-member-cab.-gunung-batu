@@ -77,9 +77,17 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
   };
 
   const renderHeader = () => (
-    <header className="flex justify-between items-center px-4 py-4 sticky top-0 bg-white/80 backdrop-blur-md z-40 md:hidden">
-      <img src="https://donatmaduindonesia.com/wp-content/uploads/2025/08/Logo-Website.svg" alt="Logo" className="h-10 w-auto" />
-      <div className="flex items-center gap-3">
+    <header className="flex justify-between items-center px-4 py-4 sticky top-0 bg-white/80 backdrop-blur-md z-40">
+      <div className="md:hidden">
+        <img src="https://donatmaduindonesia.com/wp-content/uploads/2025/08/Logo-Website.svg" alt="Logo" className="h-10 w-auto" />
+      </div>
+      
+      <div className="absolute left-1/2 -translate-x-1/2 text-center">
+        <p className="text-[10px] font-black text-chocolate-light uppercase tracking-widest leading-none">Cabang</p>
+        <p className="text-xs md:text-sm font-black text-chocolate tracking-tight">Gunung Batu</p>
+      </div>
+
+      <div className="flex items-center gap-3 md:hidden">
         <div className="text-right">
           <p className="text-sm font-black text-chocolate leading-none">{customer.name.split(' ')[0]}</p>
           <p className="text-[10px] font-bold text-honey-dark uppercase tracking-tighter">Member</p>
@@ -104,6 +112,12 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
             <Sparkles size={14} className="text-honey" /> Member Premium Donat Madu
           </p>
         </div>
+
+        <div className="text-center">
+          <p className="text-xs font-black text-chocolate-light uppercase tracking-widest leading-none">Cabang</p>
+          <p className="text-lg font-black text-chocolate tracking-tight">Gunung Batu</p>
+        </div>
+
         <button 
           onClick={() => setActiveTab('profil')}
           className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center text-chocolate hover:bg-chocolate hover:text-white transition-colors"
@@ -615,7 +629,8 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
         {/* ... existing sidebar ... */}
         <aside className="hidden md:flex flex-col w-64 h-screen sticky top-0 bg-white border-r border-orange-100 p-6">
           <div className="mb-10 px-2">
-            <img src="https://donatmaduindonesia.com/wp-content/uploads/2025/08/Logo-Website.svg" alt="Logo" className="h-12 w-auto" />
+            <img src="https://donatmaduindonesia.com/wp-content/uploads/2025/08/Logo-Website.svg" alt="Logo" className="h-12 w-auto mb-2" />
+            <p className="text-[10px] font-black text-honey-dark uppercase tracking-[0.2em]">Cab. Gunung Batu</p>
           </div>
           
           <nav className="flex-grow space-y-2">
