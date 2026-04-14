@@ -387,7 +387,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
                 </div>
                 <div className="p-6">
                   <h4 className="font-black text-xl text-chocolate line-clamp-1 mb-2">{promo.title}</h4>
-                  <p className="text-sm text-chocolate-light font-bold line-clamp-2 mb-6 leading-relaxed">{promo.description}</p>
+                  <p className="text-sm text-chocolate-light font-bold mb-6 leading-relaxed max-h-24 overflow-y-auto custom-scrollbar">{promo.description}</p>
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
                       <span className="text-[10px] font-black text-chocolate-light uppercase tracking-widest">Klaim Saya</span>
@@ -1029,6 +1029,7 @@ const FlashSaleCard: React.FC<{ promo: Promo; onClaim: (p: Promo) => void; total
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
         <div className="absolute bottom-4 left-4 right-4 text-white">
           <h4 className="font-black text-lg leading-tight line-clamp-1">{promo.title}</h4>
+          <p className="text-[10px] font-medium opacity-90 line-clamp-1 mt-1">{promo.description}</p>
         </div>
       </div>
       <div className="p-6 space-y-4 flex-grow flex flex-col justify-between">

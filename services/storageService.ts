@@ -405,7 +405,26 @@ export class StorageService {
       throw new Error("Gagal melakukan klaim. Silakan coba lagi.");
     }
 
-    // Local update (optional but good for immediate feedback)
+    // 4. Double-check for race condition (The "Loser" check)
+    if (promo.totalQuota && promo.totalQuota > 0) {
+      const { data: allClaims, error: verifyError } = await supabase
+        .from('dm_promo_claims')
+        .select('id, claimed_at')
+        .eq('promo_id', promoId)
+        .order('claimed_at', { ascending: true })
+        .order('id', { ascending: true });
+
+      if (!verifyError && allClaims) {
+        const myIndex = allClaims.findIndex(c => c.id === newClaim.id);
+        if (myIndex >= promo.totalQuota) {
+          // I was too slow! Delete my claim
+          await supabase.from('dm_promo_claims').delete().eq('id', newClaim.id);
+          throw new Error("Maaf, stok promo ini baru saja habis tepat saat Anda mengklik!");
+        }
+      }
+    }
+
+    // Local update
     const localData = this.getLocalData();
     localData.claims.push(newClaim);
     this.saveLocalData(localData);
