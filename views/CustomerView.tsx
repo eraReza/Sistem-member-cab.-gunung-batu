@@ -37,6 +37,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [promos, setPromos] = useState<Promo[]>([]);
   const [claims, setClaims] = useState<PromoClaim[]>([]);
+  const [allClaims, setAllClaims] = useState<PromoClaim[]>([]);
   const [blogs, setBlogs] = useState<Blog[]>([]);
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,16 +45,20 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
   const [showRedemption, setShowRedemption] = useState(false);
   const [selectedClaim, setSelectedClaim] = useState<PromoClaim | null>(null);
   const [selectedBlog, setSelectedBlog] = useState<Blog | null>(null);
+  const [isClaiming, setIsClaiming] = useState(false);
 
   const loadData = async () => {
-    const [allPromos, userClaims, allBlogs, allFaqs] = await Promise.all([
+    const [allPromos, userClaims, globalClaims, allBlogs, allFaqs] = await Promise.all([
       StorageService.getPromos(),
       StorageService.getClaims(customer.id),
+      StorageService.getAllClaims(),
       StorageService.getBlogs(),
       StorageService.getFAQs()
     ]);
+    console.log('Data Loaded:', { promos: allPromos.length, userClaims: userClaims.length, globalClaims: globalClaims.length });
     setPromos(allPromos.filter(p => p.isActive));
     setClaims(userClaims);
+    setAllClaims(globalClaims);
     setBlogs(allBlogs);
     setFaqs(allFaqs);
     setLoading(false);
@@ -62,17 +67,43 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
   useEffect(() => {
     loadData();
     const sub = StorageService.subscribeToUpdates(loadData);
-    return () => sub.unsubscribe();
+    
+    // Fallback polling every 5 seconds to ensure real-time progress bars
+    const pollInterval = setInterval(loadData, 5000);
+    
+    return () => {
+      sub.unsubscribe();
+      clearInterval(pollInterval);
+    };
   }, [customer.id]);
 
   const handleClaim = async (promoId: string) => {
+    if (isClaiming) return;
+    setIsClaiming(true);
+
+    // UI-side pre-check to prevent unnecessary server calls if we already know it's full
+    const promo = promos.find(p => p.id === promoId);
+    if (promo && promo.totalQuota && promo.totalQuota > 0) {
+      const currentClaims = allClaims.filter(c => c.promoId === promoId).length;
+      if (currentClaims >= promo.totalQuota) {
+        alert('Maaf, stok promo ini baru saja habis!');
+        setSelectedPromo(null);
+        loadData();
+        setIsClaiming(false);
+        return;
+      }
+    }
+
     try {
       await StorageService.claimPromo(customer.id, promoId);
       setSelectedPromo(null);
       alert('✅ Promo berhasil diklaim!');
-      loadData();
+      await loadData();
     } catch (e: any) {
       alert(e.message);
+      await loadData();
+    } finally {
+      setIsClaiming(false);
     }
   };
 
@@ -163,21 +194,13 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
           {promos.filter(p => p.isFlashSale).map(promo => (
             <div 
               key={promo.id} 
-              onClick={() => setActiveTab('promo')}
-              className="min-w-[220px] bg-white rounded-3xl p-4 shadow-xl shadow-red-900/5 border border-red-50 cursor-pointer hover:scale-[1.02] transition-transform"
+              className="min-w-[280px] md:min-w-[320px] h-full"
             >
-              <div className="h-28 bg-orange-50 rounded-2xl mb-4 overflow-hidden relative">
-                {promo.imageUrl ? (
-                  <img src={promo.imageUrl} alt={promo.title} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-red-200"><Ticket size={40} /></div>
-                )}
-                <div className="absolute bottom-2 left-2 bg-red-500 text-white text-[8px] font-black px-2 py-1 rounded-lg">TERBATAS</div>
-              </div>
-              <h4 className="font-black text-chocolate text-sm line-clamp-1 mb-1">{promo.title}</h4>
-              <p className="text-[10px] text-red-500 font-bold flex items-center gap-1">
-                <Sparkles size={10} /> Cek di Halaman Promo
-              </p>
+              <FlashSaleCard 
+                promo={promo} 
+                onClaim={setSelectedPromo} 
+                totalClaims={allClaims.filter(c => c.promoId === promo.id).length}
+              />
             </div>
           ))}
           {promos.filter(p => p.isFlashSale).length === 0 && (
@@ -326,7 +349,12 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 px-2">
             {promos.filter(p => p.isFlashSale).map(promo => (
-              <FlashSaleCard key={promo.id} promo={promo} onClaim={setSelectedPromo} />
+              <FlashSaleCard 
+                key={promo.id} 
+                promo={promo} 
+                onClaim={setSelectedPromo} 
+                totalClaims={allClaims.filter(c => c.promoId === promo.id).length}
+              />
             ))}
           </div>
         </section>
@@ -938,9 +966,10 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
                 <div className="flex flex-col gap-3">
                   <Button 
                     onClick={() => handleClaim(selectedPromo.id)}
-                    className="w-full py-4 rounded-2xl font-black text-sm shadow-xl shadow-honey/20"
+                    disabled={isClaiming}
+                    className={`w-full py-4 rounded-2xl font-black text-sm shadow-xl ${isClaiming ? 'bg-gray-300 shadow-none' : 'shadow-honey/20'}`}
                   >
-                    Ya, Klaim Sekarang
+                    {isClaiming ? 'SEDANG MEMPROSES...' : 'Ya, Klaim Sekarang'}
                   </Button>
                   <button 
                     onClick={() => setSelectedPromo(null)}
@@ -958,7 +987,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
   );
 };
 
-const FlashSaleCard: React.FC<{ promo: Promo; onClaim: (p: Promo) => void }> = ({ promo, onClaim }) => {
+const FlashSaleCard: React.FC<{ promo: Promo; onClaim: (p: Promo) => void; totalClaims: number }> = ({ promo, onClaim, totalClaims }) => {
   const [timeLeft, setTimeLeft] = useState<{h: number, m: number, s: number} | null>(null);
 
   useEffect(() => {
@@ -980,6 +1009,10 @@ const FlashSaleCard: React.FC<{ promo: Promo; onClaim: (p: Promo) => void }> = (
     return () => clearInterval(timer);
   }, [promo.endTime]);
 
+  const progress = promo.totalQuota && promo.totalQuota > 0 
+    ? Math.min(100, (totalClaims / promo.totalQuota) * 100) 
+    : 0;
+
   return (
     <Card className="p-0 overflow-hidden border-2 border-red-100 rounded-[2.5rem] shadow-xl shadow-red-50 relative group h-full flex flex-col">
       <div className="absolute top-4 left-4 z-10">
@@ -1000,34 +1033,53 @@ const FlashSaleCard: React.FC<{ promo: Promo; onClaim: (p: Promo) => void }> = (
       </div>
       <div className="p-6 space-y-4 flex-grow flex flex-col justify-between">
         <div className="space-y-4">
-          {timeLeft && (
+          {timeLeft ? (
             <div className="flex items-center justify-between">
               <p className="text-[10px] font-black text-chocolate-light uppercase tracking-widest">Berakhir Dalam:</p>
-              <div className="flex gap-1">
-                {[timeLeft.h, timeLeft.m, timeLeft.s].map((val, i) => (
-                  <div key={i} className="bg-red-500 text-white text-[10px] font-black px-1.5 py-1 rounded-md min-w-[20px] text-center">
-                    {val.toString().padStart(2, '0')}
+              <div className="flex gap-1.5">
+                {[
+                  { val: timeLeft.h, label: 'j' },
+                  { val: timeLeft.m, label: 'm' },
+                  { val: timeLeft.s, label: 'd' }
+                ].map((item, i) => (
+                  <div key={i} className="flex flex-col items-center">
+                    <div className="bg-red-500 text-white text-[10px] font-black px-1.5 py-1 rounded-md min-w-[24px] text-center">
+                      {item.val.toString().padStart(2, '0')}
+                    </div>
+                    <span className="text-[8px] font-black text-red-500 uppercase mt-0.5">{item.label}</span>
                   </div>
                 ))}
               </div>
             </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Segera Berakhir</p>
+            </div>
           )}
           <div className="space-y-1.5">
             <div className="flex justify-between text-[10px] font-black text-chocolate-light uppercase tracking-widest">
-              <span>Stok: {promo.totalQuota || 'Terbatas'}</span>
-              <span>75% Terjual</span>
+              <span>Stok: {promo.totalQuota ? promo.totalQuota - totalClaims : 'Terbatas'}</span>
+              <span>{Math.round(progress)}% Terjual</span>
             </div>
             <div className="h-2 bg-orange-100 rounded-full overflow-hidden">
               <motion.div 
                 initial={{ width: 0 }}
-                animate={{ width: '75%' }}
+                animate={{ width: `${progress}%` }}
                 className="h-full bg-gradient-to-r from-red-500 to-orange-500"
               />
             </div>
           </div>
         </div>
-        <Button onClick={() => onClaim(promo)} className="w-full py-3.5 rounded-2xl shadow-lg shadow-red-100 bg-red-500 hover:bg-red-600 mt-2">
-          KLAIM SEKARANG
+        <Button 
+          onClick={() => onClaim(promo)} 
+          disabled={promo.totalQuota ? totalClaims >= promo.totalQuota : false}
+          className={`w-full py-3.5 rounded-2xl shadow-lg mt-2 ${
+            promo.totalQuota && totalClaims >= promo.totalQuota 
+            ? 'bg-gray-300 shadow-none cursor-not-allowed' 
+            : 'shadow-red-100 bg-red-500 hover:bg-red-600'
+          }`}
+        >
+          {promo.totalQuota && totalClaims >= promo.totalQuota ? 'STOK HABIS' : 'KLAIM SEKARANG'}
         </Button>
       </div>
     </Card>

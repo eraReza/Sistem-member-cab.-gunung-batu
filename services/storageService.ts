@@ -318,15 +318,70 @@ export class StorageService {
     return this.getLocalData().claims.filter(c => c.userId === userId);
   }
 
-  static async claimPromo(userId: string, promoId: string) {
-    const promos = await this.getPromos();
-    const promo = promos.find(p => p.id === promoId);
-    if (!promo) throw new Error("Promo tidak ditemukan.");
+  static async getAllClaims(): Promise<PromoClaim[]> {
+    try {
+      const { data, error } = await supabase.from('dm_promo_claims').select('*');
+      if (!error && data) {
+        return data.map(c => ({
+          id: c.id,
+          promoId: c.promo_id,
+          userId: c.user_id,
+          claimedAt: c.claimed_at,
+          status: c.status as 'claimed' | 'used',
+          usedAt: c.used_at
+        }));
+      }
+    } catch (e) {}
 
-    const claims = await this.getClaims(userId);
-    const activeClaims = claims.filter(c => c.promoId === promoId);
-    if (activeClaims.length >= promo.claimLimit) {
-      throw new Error("Limit klaim tercapai.");
+    return this.getLocalData().claims;
+  }
+
+  static async claimPromo(userId: string, promoId: string) {
+    // 1. Get the latest promo data
+    const { data: promoData, error: promoError } = await supabase
+      .from('dm_promos')
+      .select('*')
+      .eq('id', promoId)
+      .single();
+
+    if (promoError || !promoData) throw new Error("Promo tidak ditemukan.");
+    
+    const promo: Promo = {
+      id: promoData.id,
+      title: promoData.title,
+      description: promoData.description,
+      imageUrl: promoData.image_url,
+      claimLimit: promoData.claim_limit,
+      isActive: promoData.is_active,
+      isFlashSale: promoData.is_flash_sale,
+      totalQuota: promoData.total_quota,
+      endTime: promoData.end_time,
+      createdAt: promoData.created_at || new Date().toISOString()
+    };
+
+    // 2. Check global quota (MOST CRITICAL)
+    if (promo.totalQuota && promo.totalQuota > 0) {
+      const { count, error: countError } = await supabase
+        .from('dm_promo_claims')
+        .select('*', { count: 'exact', head: true })
+        .eq('promo_id', promoId);
+      
+      if (countError) throw new Error("Gagal memverifikasi kuota.");
+      if (count !== null && count >= promo.totalQuota) {
+        throw new Error("Maaf, stok promo ini sudah habis baru saja!");
+      }
+    }
+
+    // 3. Check user's personal limit
+    const { data: userClaims, error: userClaimsError } = await supabase
+      .from('dm_promo_claims')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('promo_id', promoId);
+
+    if (userClaimsError) throw new Error("Gagal memverifikasi limit klaim.");
+    if (userClaims && userClaims.length >= promo.claimLimit) {
+      throw new Error("Anda sudah mencapai batas klaim untuk promo ini.");
     }
 
     const newClaim: PromoClaim = {
@@ -337,21 +392,23 @@ export class StorageService {
       status: 'claimed'
     };
 
-    // Local
-    const data = this.getLocalData();
-    data.claims.push(newClaim);
-    this.saveLocalData(data);
+    // Supabase Insert
+    const { error: insertError } = await supabase.from('dm_promo_claims').insert({
+      id: newClaim.id,
+      promo_id: promoId,
+      user_id: userId,
+      claimed_at: newClaim.claimedAt,
+      status: 'claimed'
+    });
 
-    // Supabase
-    try {
-      await supabase.from('dm_promo_claims').insert({
-        id: newClaim.id,
-        promo_id: promoId,
-        user_id: userId,
-        claimed_at: newClaim.claimedAt,
-        status: 'claimed'
-      });
-    } catch (e) {}
+    if (insertError) {
+      throw new Error("Gagal melakukan klaim. Silakan coba lagi.");
+    }
+
+    // Local update (optional but good for immediate feedback)
+    const localData = this.getLocalData();
+    localData.claims.push(newClaim);
+    this.saveLocalData(localData);
 
     this.notifyUpdate();
   }

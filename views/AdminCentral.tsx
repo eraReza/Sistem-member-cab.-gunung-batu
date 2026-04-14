@@ -35,6 +35,8 @@ const AdminCentral: React.FC = () => {
   const [showMemberForm, setShowMemberForm] = useState(false);
   const [newMember, setNewMember] = useState({ name: '', phone: '' });
 
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [redeemStatus, setRedeemStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [scannedClaim, setScannedClaim] = useState<{claim: PromoClaim, promo: Promo, user: User} | null>(null);
@@ -75,34 +77,25 @@ const AdminCentral: React.FC = () => {
   const handleScan = async (claimId: string) => {
     setRedeemStatus('loading');
     try {
-      const allUsers = await StorageService.getUsers();
-      // We need a way to find a claim by ID across all users. 
-      // For now, let's assume we fetch all claims or have a direct lookup.
-      // Since StorageService only has getClaims(userId), we might need a more global method.
-      // Let's add a temporary global claim lookup or just use the userId if encoded in QR.
-      // Better: Update StorageService to have a global lookup.
+      const allClaims = await StorageService.getAllClaims();
+      const claim = allClaims.find(c => c.id === claimId);
       
-      // For this demo, let's try to find it by checking all members' claims
-      let found: {claim: PromoClaim, promo: Promo, user: User} | null = null;
-      for (const user of allUsers) {
-        const userClaims = await StorageService.getClaims(user.id);
-        const claim = userClaims.find(c => c.id === claimId);
-        if (claim) {
-          const promo = promos.find(p => p.id === claim.promoId);
-          if (promo) {
-            found = { claim, promo, user };
-            break;
+      if (claim) {
+        const allUsers = await StorageService.getUsers();
+        const user = allUsers.find(u => u.id === claim.userId);
+        const promo = promos.find(p => p.id === claim.promoId);
+        
+        if (user && promo) {
+          if (claim.status === 'used') {
+            alert('Voucher ini sudah pernah digunakan!');
+            setRedeemStatus('error');
+          } else {
+            setScannedClaim({ claim, promo, user });
+            setRedeemStatus('success');
           }
-        }
-      }
-
-      if (found) {
-        if (found.claim.status === 'used') {
-          alert('Voucher ini sudah pernah digunakan!');
-          setRedeemStatus('error');
         } else {
-          setScannedClaim(found);
-          setRedeemStatus('success');
+          alert('Data user atau promo tidak ditemukan.');
+          setRedeemStatus('error');
         }
       } else {
         alert('Voucher tidak valid!');
@@ -127,6 +120,18 @@ const AdminCentral: React.FC = () => {
     }
   };
 
+  const formatDateForInput = (dateStr?: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
   const handleSavePromo = async () => {
     try {
       if (!promoForm.title || !promoForm.description) {
@@ -143,11 +148,15 @@ const AdminCentral: React.FC = () => {
   };
 
   const handleDeletePromo = async (id: string) => {
-    if (window.confirm('Hapus promo ini?')) {
+    if (confirmDeleteId === id) {
       try {
         await StorageService.deletePromo(id);
+        setConfirmDeleteId(null);
         loadData();
       } catch (e) { alert('Gagal menghapus promo.'); }
+    } else {
+      setConfirmDeleteId(id);
+      setTimeout(() => setConfirmDeleteId(null), 3000);
     }
   };
 
@@ -315,12 +324,17 @@ const AdminCentral: React.FC = () => {
                     <p className="text-xs text-chocolate-light font-bold mb-4 line-clamp-2">{p.description}</p>
                     <div className="space-y-2 mt-4">
                       <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-chocolate-light">
-                        <span>Quota: {p.totalQuota}</span>
-                        <span>Selesai: {p.endTime ? new Date(p.endTime).toLocaleDateString('id') : '-'}</span>
+                        <span>Quota: {p.totalQuota || '∞'}</span>
+                        <span>Selesai: {p.endTime ? new Date(p.endTime).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '-'}</span>
                       </div>
                       <div className="flex gap-2 mt-4">
                         <button onClick={() => { setEditingPromo(p); setPromoForm(p); setShowPromoForm(true); }} className="flex-grow py-2 bg-orange-50 rounded-xl text-[10px] font-black hover:bg-honey transition-colors">EDIT</button>
-                        <button onClick={() => handleDeletePromo(p.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors"><Trash2 size={16} /></button>
+                        <button 
+                          onClick={() => handleDeletePromo(p.id)} 
+                          className={`p-2 rounded-xl transition-all flex items-center gap-1 ${confirmDeleteId === p.id ? 'bg-red-500 text-white px-3' : 'text-red-500 hover:bg-red-50'}`}
+                        >
+                          {confirmDeleteId === p.id ? <span className="text-[10px] font-black">YAKIN?</span> : <Trash2 size={16} />}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -353,7 +367,12 @@ const AdminCentral: React.FC = () => {
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => { setEditingPromo(p); setPromoForm(p); setShowPromoForm(true); }} className="p-2 text-chocolate-light hover:text-honey transition-colors"><Edit2 size={16} /></button>
-                        <button onClick={() => handleDeletePromo(p.id)} className="p-2 text-chocolate-light hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
+                        <button 
+                          onClick={() => handleDeletePromo(p.id)} 
+                          className={`p-2 rounded-xl transition-all flex items-center gap-1 ${confirmDeleteId === p.id ? 'bg-red-500 text-white px-3' : 'text-chocolate-light hover:text-red-500'}`}
+                        >
+                          {confirmDeleteId === p.id ? <span className="text-[10px] font-black">HAPUS?</span> : <Trash2 size={16} />}
+                        </button>
                       </div>
                     </div>
                     <h4 className="font-black text-xl mb-1">{p.title}</h4>
@@ -404,7 +423,7 @@ const AdminCentral: React.FC = () => {
               {promoForm.isFlashSale && (
                 <div className="grid grid-cols-2 gap-4 p-4 bg-red-50 rounded-2xl border border-red-100">
                   <Input label="Total Quota (Stok)" type="number" value={promoForm.totalQuota || 0} onChange={e => setPromoForm({...promoForm, totalQuota: Number(e.target.value)})} />
-                  <Input label="Waktu Berakhir" type="datetime-local" value={promoForm.endTime ? new Date(promoForm.endTime).toISOString().slice(0, 16) : ''} onChange={e => setPromoForm({...promoForm, endTime: new Date(e.target.value).toISOString()})} />
+                  <Input label="Waktu Berakhir" type="datetime-local" value={formatDateForInput(promoForm.endTime)} onChange={e => setPromoForm({...promoForm, endTime: new Date(e.target.value).toISOString()})} />
                 </div>
               )}
 
