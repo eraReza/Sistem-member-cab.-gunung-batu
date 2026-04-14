@@ -1,0 +1,5 @@
+{
+  "name": "Donat Madu Loyalty System",
+  "description": "Sistem loyalty berbasis poin untuk brand Donat Madu Indonesia. Memungkinkan Admin Pusat mengelola outlet dan reward, Admin Outlet mencatat transaksi, dan Customer memantau poin serta menukarkan reward dengan nuansa desain hangat dan ramah keluarga.",
+  "requestFramePermissions": []
+}
