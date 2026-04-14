@@ -1059,7 +1059,7 @@ const FlashSaleCard: React.FC<{ promo: Promo; onClaim: (p: Promo) => void; total
           )}
           <div className="space-y-1.5">
             <div className="flex justify-between text-[10px] font-black text-chocolate-light uppercase tracking-widest">
-              <span>Stok: {promo.totalQuota ? promo.totalQuota - totalClaims : 'Terbatas'}</span>
+              <span>Stok: {promo.totalQuota ? Math.max(0, promo.totalQuota - totalClaims) : 'Terbatas'}</span>
               <span>{Math.round(progress)}% Terjual</span>
             </div>
             <div className="h-2 bg-orange-100 rounded-full overflow-hidden">

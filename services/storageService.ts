@@ -393,31 +393,34 @@ export class StorageService {
     };
 
     // Supabase Insert
-    const { error: insertError } = await supabase.from('dm_promo_claims').insert({
+    const { data: insertedData, error: insertError } = await supabase.from('dm_promo_claims').insert({
       id: newClaim.id,
       promo_id: promoId,
       user_id: userId,
       claimed_at: newClaim.claimedAt,
       status: 'claimed'
-    });
+    }).select().single();
 
     if (insertError) {
       throw new Error("Gagal melakukan klaim. Silakan coba lagi.");
     }
 
-    // 4. Double-check for race condition (The "Loser" check)
+    // 4. Robust Race Condition Check (The "Highlander" Pattern)
     if (promo.totalQuota && promo.totalQuota > 0) {
+      // Small delay to allow database consistency across parallel requests
+      await new Promise(resolve => setTimeout(resolve, 800));
+
       const { data: allClaims, error: verifyError } = await supabase
         .from('dm_promo_claims')
-        .select('id, claimed_at')
+        .select('id, created_at')
         .eq('promo_id', promoId)
-        .order('claimed_at', { ascending: true })
-        .order('id', { ascending: true });
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true }); // Tie-breaker
 
       if (!verifyError && allClaims) {
         const myIndex = allClaims.findIndex(c => c.id === newClaim.id);
-        if (myIndex >= promo.totalQuota) {
-          // I was too slow! Delete my claim
+        if (myIndex === -1 || myIndex >= promo.totalQuota) {
+          // I was too slow or something went wrong! Rollback.
           await supabase.from('dm_promo_claims').delete().eq('id', newClaim.id);
           throw new Error("Maaf, stok promo ini baru saja habis tepat saat Anda mengklik!");
         }
