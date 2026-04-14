@@ -371,34 +371,63 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 px-2">
           {promos.filter(p => !p.isFlashSale).map((promo) => {
             const userClaims = claims.filter(c => c.promoId === promo.id).length;
+            const totalClaimsForThisPromo = allClaims.filter(c => c.promoId === promo.id).length;
             const isLimitReached = userClaims >= promo.claimLimit;
+            const isStockOut = promo.totalQuota ? totalClaimsForThisPromo >= promo.totalQuota : false;
+            
+            const progress = promo.totalQuota && promo.totalQuota > 0 
+              ? Math.min(100, (totalClaimsForThisPromo / promo.totalQuota) * 100) 
+              : 0;
 
             return (
-              <Card key={promo.id} className="p-0 overflow-hidden border-none shadow-xl shadow-chocolate/5 rounded-[2.5rem] bg-white group">
-                <div className="h-48 bg-orange-50 relative">
+              <Card key={promo.id} className="p-0 overflow-hidden border-none shadow-xl shadow-chocolate/5 rounded-[2.5rem] bg-white group flex flex-col h-full">
+                <div className="h-48 bg-orange-50 relative flex-shrink-0">
                   {promo.imageUrl ? (
                     <img src={promo.imageUrl} alt={promo.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-orange-200"><Ticket size={48} /></div>
                   )}
-                  <div className="absolute top-4 right-4">
+                  <div className="absolute top-4 right-4 flex flex-col gap-2 items-end">
                     <Badge color="yellow" className="shadow-lg">LIMIT: {promo.claimLimit}x</Badge>
+                    {isStockOut && <Badge color="red" className="shadow-lg animate-bounce">STOK HABIS</Badge>}
                   </div>
                 </div>
-                <div className="p-6">
-                  <h4 className="font-black text-xl text-chocolate line-clamp-1 mb-2">{promo.title}</h4>
-                  <p className="text-sm text-chocolate-light font-bold mb-6 leading-relaxed max-h-24 overflow-y-auto custom-scrollbar">{promo.description}</p>
-                  <div className="flex items-center justify-between">
+                <div className="p-6 flex-grow flex flex-col justify-between">
+                  <div>
+                    <h4 className="font-black text-xl text-chocolate line-clamp-1 mb-2">{promo.title}</h4>
+                    <p className="text-sm text-chocolate-light font-bold mb-6 leading-relaxed max-h-24 overflow-y-auto custom-scrollbar">{promo.description}</p>
+                    
+                    {/* Stock Progress Bar for Regular Promo */}
+                    <div className="mb-6 space-y-2">
+                      <div className="flex justify-between text-[10px] font-black text-chocolate-light uppercase tracking-widest">
+                        <span>Sisa: {promo.totalQuota ? Math.max(0, promo.totalQuota - totalClaimsForThisPromo) : 'Terbatas'}</span>
+                        <span>{Math.round(progress)}% Terpakai</span>
+                      </div>
+                      <div className="h-1.5 bg-orange-50 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${progress}%` }}
+                          className={`h-full ${progress > 80 ? 'bg-red-400' : 'bg-honey'}`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between mt-auto pt-4 border-t border-orange-50/50">
                     <div className="flex flex-col">
                       <span className="text-[10px] font-black text-chocolate-light uppercase tracking-widest">Klaim Saya</span>
                       <span className="text-lg font-black text-chocolate">{userClaims} / {promo.claimLimit}</span>
                     </div>
                     <Button 
                       onClick={() => setSelectedPromo(promo)}
-                      disabled={isLimitReached}
-                      className={`px-8 py-3 rounded-2xl text-sm font-black shadow-lg ${isLimitReached ? 'bg-gray-100 text-gray-400 shadow-none' : 'shadow-honey/20'}`}
+                      disabled={isLimitReached || isStockOut}
+                      className={`px-8 py-3 rounded-2xl text-sm font-black shadow-lg transition-all ${
+                        isLimitReached || isStockOut 
+                        ? 'bg-gray-100 text-gray-400 shadow-none cursor-not-allowed' 
+                        : 'shadow-honey/20 bg-honey hover:bg-honey-dark text-white'
+                      }`}
                     >
-                      {isLimitReached ? 'Sudah Maksimal' : 'Klaim Voucher'}
+                      {isStockOut ? 'STOK HABIS' : isLimitReached ? 'SUDAH KLAIM' : 'KLAIM VOUCHER'}
                     </Button>
                   </div>
                 </div>
