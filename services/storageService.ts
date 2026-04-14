@@ -337,97 +337,31 @@ export class StorageService {
   }
 
   static async claimPromo(userId: string, promoId: string) {
-    // 1. Get the latest promo data
-    const { data: promoData, error: promoError } = await supabase
-      .from('dm_promos')
-      .select('*')
-      .eq('id', promoId)
-      .single();
+    // Call the Shopee-style RPC function
+    const { data, error } = await supabase.rpc('claim_promo_v3', {
+      p_user_id: userId,
+      p_promo_id: promoId
+    });
 
-    if (promoError || !promoData) throw new Error("Promo tidak ditemukan.");
-    
-    const promo: Promo = {
-      id: promoData.id,
-      title: promoData.title,
-      description: promoData.description,
-      imageUrl: promoData.image_url,
-      claimLimit: promoData.claim_limit,
-      isActive: promoData.is_active,
-      isFlashSale: promoData.is_flash_sale,
-      totalQuota: promoData.total_quota,
-      endTime: promoData.end_time,
-      createdAt: promoData.created_at || new Date().toISOString()
-    };
-
-    // 2. Check global quota (MOST CRITICAL)
-    if (promo.totalQuota && promo.totalQuota > 0) {
-      const { count, error: countError } = await supabase
-        .from('dm_promo_claims')
-        .select('*', { count: 'exact', head: true })
-        .eq('promo_id', promoId);
-      
-      if (countError) throw new Error("Gagal memverifikasi kuota.");
-      if (count !== null && count >= promo.totalQuota) {
-        throw new Error("Maaf, stok promo ini sudah habis baru saja!");
-      }
+    if (error) {
+      throw new Error("Gagal menghubungi server antrian. Silakan coba lagi.");
     }
 
-    // 3. Check user's personal limit
-    const { data: userClaims, error: userClaimsError } = await supabase
-      .from('dm_promo_claims')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('promo_id', promoId);
+    const result = data as { success: boolean; message?: string; claim_id?: string };
 
-    if (userClaimsError) throw new Error("Gagal memverifikasi limit klaim.");
-    if (userClaims && userClaims.length >= promo.claimLimit) {
-      throw new Error("Anda sudah mencapai batas klaim untuk promo ini.");
+    if (!result.success) {
+      throw new Error(result.message || "Gagal melakukan klaim.");
     }
 
+    // Local update for immediate UI feedback
     const newClaim: PromoClaim = {
-      id: this.generateId(),
+      id: result.claim_id!,
       promoId,
       userId,
       claimedAt: new Date().toISOString(),
       status: 'claimed'
     };
 
-    // Supabase Insert
-    const { data: insertedData, error: insertError } = await supabase.from('dm_promo_claims').insert({
-      id: newClaim.id,
-      promo_id: promoId,
-      user_id: userId,
-      claimed_at: newClaim.claimedAt,
-      status: 'claimed'
-    }).select().single();
-
-    if (insertError) {
-      throw new Error("Gagal melakukan klaim. Silakan coba lagi.");
-    }
-
-    // 4. Robust Race Condition Check (The "Highlander" Pattern)
-    if (promo.totalQuota && promo.totalQuota > 0) {
-      // Small delay to allow database consistency across parallel requests
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      const { data: allClaims, error: verifyError } = await supabase
-        .from('dm_promo_claims')
-        .select('id, created_at')
-        .eq('promo_id', promoId)
-        .order('created_at', { ascending: true })
-        .order('id', { ascending: true }); // Tie-breaker
-
-      if (!verifyError && allClaims) {
-        const myIndex = allClaims.findIndex(c => c.id === newClaim.id);
-        if (myIndex === -1 || myIndex >= promo.totalQuota) {
-          // I was too slow or something went wrong! Rollback.
-          await supabase.from('dm_promo_claims').delete().eq('id', newClaim.id);
-          throw new Error("Maaf, stok promo ini baru saja habis tepat saat Anda mengklik!");
-        }
-      }
-    }
-
-    // Local update
     const localData = this.getLocalData();
     localData.claims.push(newClaim);
     this.saveLocalData(localData);
