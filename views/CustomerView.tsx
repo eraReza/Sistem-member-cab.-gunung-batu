@@ -584,56 +584,67 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
   };
 
   const renderKartu = () => (
-    <div className="space-y-8 pb-28 flex flex-col items-center">
-      <header className="text-center w-full px-2">
-        <h2 className="text-2xl font-black text-chocolate">Kartu Member Digital</h2>
-        <p className="text-xs text-chocolate-light font-bold">Tunjukkan kartu ini ke kasir saat bertransaksi</p>
+    <div className="space-y-6 md:space-y-8 pb-28 flex flex-col items-center">
+      <header className="text-center w-full px-4">
+        <h2 className="text-2xl md:text-3xl font-black text-chocolate tracking-tight">Kartu Member Digital</h2>
+        <p className="text-xs md:text-sm text-chocolate-light font-bold">Tunjukkan kartu eksklusif ini ke kasir</p>
       </header>
 
       <motion.div 
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="w-full max-w-sm aspect-[1.6/1] bg-gradient-to-br from-chocolate via-chocolate-dark to-black rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden ring-8 ring-honey/10"
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        className="w-[94%] max-w-sm min-h-[200px] bg-gradient-to-br from-[#BF953F] via-[#FCF6BA] to-[#B38728] rounded-[2.5rem] p-5 md:p-8 text-chocolate shadow-[0_20px_50px_rgba(191,149,63,0.3)] relative overflow-hidden border-4 border-white/30 flex flex-col justify-between"
       >
-        <div className="absolute top-0 right-0 w-64 h-64 bg-honey/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
+        {/* Decorative Elements */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/20 rounded-full -mr-20 -mt-20 blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/5 rounded-full -ml-10 -mb-10 blur-2xl"></div>
+        
+        {/* Subtle Pattern Overlay */}
+        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(0,0,0,0.15) 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
+
         <div className="relative z-10 h-full flex flex-col justify-between">
           <div className="flex justify-between items-start">
-            <img src="https://donatmaduindonesia.com/wp-content/uploads/2025/08/Logo-Website.svg" alt="Logo" className="h-10 w-auto brightness-0 invert" />
+            <div className="bg-white/40 backdrop-blur-md p-2 rounded-2xl border border-white/50">
+              <img src="https://donatmaduindonesia.com/wp-content/uploads/2025/08/Logo-Website.svg" alt="Logo" className="h-8 w-auto" />
+            </div>
             <div className="text-right">
-              <p className="text-[10px] font-black text-honey uppercase tracking-[0.2em]">Premium Member</p>
-              <p className="text-[8px] text-white/50 font-medium">EST. {new Date(customer.memberSince || '').getFullYear()}</p>
+              <Badge color="yellow" className="bg-chocolate text-honey border-none px-3 py-1 shadow-lg">
+                GOLD MEMBER
+              </Badge>
+              <p className="text-[9px] text-chocolate/60 font-black mt-1 uppercase tracking-widest">EST. {new Date(customer.memberSince || '').getFullYear()}</p>
             </div>
           </div>
 
-          <div>
-            <h3 className="text-2xl font-black tracking-tight mb-1">{customer.name}</h3>
-            <p className="text-sm font-mono text-white/70 tracking-widest">
+          <div className="mt-2 md:mt-4">
+            <p className="text-[9px] md:text-[10px] font-black text-chocolate/60 uppercase tracking-[0.3em] mb-1">Card Holder</p>
+            <h3 className="text-xl md:text-3xl font-black tracking-tight leading-none drop-shadow-sm truncate">{customer.name}</h3>
+            <p className="text-xs md:text-base font-mono text-chocolate/80 font-bold mt-1 md:mt-2 tracking-[0.15em]">
               {customer.phone.replace(/(\d{4})(\d{4})(\d{4})/, '$1 $2 $3')}
             </p>
           </div>
 
-          <div className="flex justify-between items-end">
-            <div className="bg-white/10 backdrop-blur px-4 py-2 rounded-2xl border border-white/10">
-              <p className="text-[8px] text-white/60 font-bold uppercase tracking-widest">Member ID</p>
-              <p className="text-xs font-black font-mono">{customer.id.slice(0, 8).toUpperCase()}</p>
+          <div className="flex justify-between items-end mt-2">
+            <div className="bg-chocolate/10 backdrop-blur-md px-3 md:px-4 py-1.5 md:py-2 rounded-xl md:rounded-2xl border border-chocolate/10">
+              <p className="text-[7px] md:text-[8px] text-chocolate/60 font-black uppercase tracking-widest">Unique ID</p>
+              <p className="text-[10px] md:text-xs font-black font-mono text-chocolate">{customer.id.slice(0, 8).toUpperCase()}</p>
             </div>
-            <div className="w-14 h-14 bg-white rounded-2xl p-1.5 shadow-lg">
-              <div className="w-full h-full bg-black rounded-xl opacity-20 flex items-center justify-center">
-                <CreditCard size={24} className="text-white" />
+            <div className="flex flex-col items-end">
+              <div className="w-12 h-12 bg-chocolate text-honey rounded-2xl flex items-center justify-center shadow-xl border border-honey/30">
+                <Sparkles size={24} />
               </div>
             </div>
           </div>
         </div>
       </motion.div>
 
-      <div className="w-full max-w-sm space-y-4 px-2">
-        <Card className="p-6 flex items-center gap-4 border-none shadow-sm bg-orange-50/50 rounded-3xl">
-          <div className="w-12 h-12 bg-honey/20 rounded-2xl flex items-center justify-center text-honey-dark">
+      <div className="w-full max-w-sm space-y-4 px-4">
+        <Card className="p-6 flex items-center gap-4 border-none shadow-xl shadow-chocolate/5 bg-white rounded-[2rem]">
+          <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600 shadow-inner">
             <Info size={24} />
           </div>
           <div>
-            <h4 className="font-bold text-chocolate text-sm">Cara Penggunaan</h4>
-            <p className="text-[10px] text-chocolate-light mt-1 font-medium leading-relaxed">Kasir akan memindai atau mencatat nomor HP Anda untuk memproses promo spesial member.</p>
+            <h4 className="font-black text-chocolate text-sm">Keuntungan Gold</h4>
+            <p className="text-[11px] text-chocolate-light mt-1 font-bold leading-relaxed">Akses promo eksklusif, prioritas antrian, dan poin reward setiap transaksi.</p>
           </div>
         </Card>
       </div>
@@ -1003,13 +1014,13 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
               onClick={() => setActiveTab('kartu')}
               className={`w-16 h-16 rounded-full flex items-center justify-center shadow-2xl transition-all duration-500 ${
                 activeTab === 'kartu' 
-                ? 'bg-gradient-to-tr from-chocolate to-chocolate-dark text-white scale-110 ring-4 ring-white' 
-                : 'bg-gradient-to-tr from-blue-400 to-blue-600 text-white hover:scale-105'
+                ? 'bg-gradient-to-tr from-[#BF953F] via-[#FCF6BA] to-[#B38728] text-chocolate scale-110 ring-4 ring-white' 
+                : 'bg-gradient-to-tr from-chocolate to-chocolate-dark text-white hover:scale-105'
               }`}
             >
               <CreditCard size={32} />
             </button>
-            <p className={`text-[10px] font-black text-center mt-2 transition-colors duration-300 ${activeTab === 'kartu' ? 'text-chocolate' : 'text-chocolate-light'}`}>
+            <p className={`text-[10px] font-black text-center mt-2 transition-colors duration-300 ${activeTab === 'kartu' ? 'text-honey-dark' : 'text-chocolate-light'}`}>
               KARTU
             </p>
           </div>
