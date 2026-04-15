@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, Promo, PromoClaim, Blog, FAQ } from '../types';
 import { StorageService } from '../services/storageService';
 import { 
@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card, Button, Badge } from '../components/UI';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 
 interface CustomerViewProps {
   customer: User;
@@ -46,6 +46,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
   const [selectedClaim, setSelectedClaim] = useState<PromoClaim | null>(null);
   const [selectedBlog, setSelectedBlog] = useState<Blog | null>(null);
   const [isClaiming, setIsClaiming] = useState(false);
+  const qrCanvasRef = useRef<HTMLDivElement>(null);
 
   const loadData = async () => {
     const [allPromos, userClaims, globalClaims, allBlogs, allFaqs] = await Promise.all([
@@ -105,6 +106,61 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
     } finally {
       setIsClaiming(false);
     }
+  };
+
+  const handleDownloadQR = () => {
+    if (!selectedClaim || !qrCanvasRef.current) return;
+    
+    const promo = promos.find(p => p.id === selectedClaim.promoId);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Set dimensions
+    canvas.width = 400;
+    canvas.height = 550;
+
+    // Background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Header Background
+    ctx.fillStyle = '#3d2b1f';
+    ctx.fillRect(0, 0, canvas.width, 80);
+
+    // Title
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 20px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('VOUCHER DONAT MADU', canvas.width / 2, 45);
+
+    // Promo Title
+    ctx.fillStyle = '#3d2b1f';
+    ctx.font = 'black 24px Arial';
+    ctx.fillText(promo?.title || 'Promo Spesial', canvas.width / 2, 130);
+
+    // Draw QR Code from hidden canvas
+    const qrCanvas = qrCanvasRef.current.querySelector('canvas');
+    if (qrCanvas) {
+      ctx.drawImage(qrCanvas, 75, 160, 250, 250);
+    }
+
+    // Voucher ID
+    ctx.fillStyle = '#3d2b1f';
+    ctx.font = 'bold 18px Courier New';
+    ctx.fillText(`KODE: ${selectedClaim.id.slice(0, 8).toUpperCase()}`, canvas.width / 2, 450);
+
+    // Footer
+    ctx.fillStyle = '#8b5e3c';
+    ctx.font = '12px Arial';
+    ctx.fillText('Tunjukkan ke kasir untuk penukaran', canvas.width / 2, 500);
+    ctx.fillText('Cabang: Gunung Batu', canvas.width / 2, 520);
+
+    // Download
+    const link = document.createElement('a');
+    link.download = `voucher-${promo?.title || 'donat-madu'}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
   };
 
   const renderHeader = () => (
@@ -860,44 +916,60 @@ const CustomerView: React.FC<CustomerViewProps> = ({ customer, onLogout }) => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="relative bg-white w-full max-w-xs rounded-[2.5rem] overflow-hidden shadow-2xl p-6 text-center"
+              className="relative bg-white w-full max-w-sm rounded-[2.5rem] overflow-hidden shadow-2xl p-8 text-center"
             >
-              <div className="mb-4">
-                <h3 className="text-xl font-black text-chocolate mb-1">Tunjukkan QR Ini</h3>
-                <p className="text-[10px] text-chocolate-light font-bold">Datang ke outlet Cab. Gunung Batu</p>
+              <div className="mb-6">
+                <Badge color="yellow" className="mb-2">VOUCHER AKTIF</Badge>
+                <h3 className="text-2xl font-black text-chocolate leading-tight">
+                  {promos.find(p => p.id === selectedClaim.promoId)?.title}
+                </h3>
+                <p className="text-xs text-chocolate-light font-bold mt-2">ID: {selectedClaim.id.toUpperCase()}</p>
               </div>
 
-              <div className="bg-orange-50 p-6 rounded-[2rem] mb-6 flex items-center justify-center shadow-inner">
+              <div className="bg-orange-50 p-8 rounded-[2.5rem] mb-6 flex flex-col items-center justify-center shadow-inner border-2 border-orange-100/50">
                 <QRCodeSVG 
+                  id="qr-code-svg"
                   value={selectedClaim.id} 
-                  size={160}
+                  size={180}
                   level="H"
                   includeMargin={false}
                   fgColor="#3d2b1f"
                 />
+                <div className="mt-6 pt-4 border-t border-orange-200 w-full">
+                  <p className="text-[10px] font-black text-chocolate-light uppercase tracking-widest">Kode Penukaran:</p>
+                  <p className="text-lg font-black font-mono text-chocolate tracking-widest">{selectedClaim.id.slice(0, 8).toUpperCase()}</p>
+                </div>
               </div>
 
-              <div className="space-y-3 text-left bg-orange-50/50 p-4 rounded-2xl mb-6">
-                <p className="text-[9px] font-black text-chocolate-light uppercase tracking-widest mb-1">Tata Cara:</p>
-                <ol className="text-[11px] font-bold text-chocolate space-y-1.5">
-                  <li className="flex gap-2">
-                    <span className="w-4 h-4 bg-chocolate text-white rounded-full flex items-center justify-center flex-shrink-0 text-[9px]">1</span>
-                    Datang ke outlet Donat Madu
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="w-4 h-4 bg-chocolate text-white rounded-full flex items-center justify-center flex-shrink-0 text-[9px]">2</span>
-                    Tunjukkan QR ini ke kasir
-                  </li>
-                </ol>
+              {/* Hidden canvas for generation */}
+              <div ref={qrCanvasRef} className="hidden">
+                <QRCodeCanvas value={selectedClaim.id} size={250} />
               </div>
 
-              <div className="flex flex-col gap-2">
-                <Button className="w-full py-3 rounded-xl font-black text-xs flex items-center justify-center gap-2">
-                  <Download size={16} /> Simpan QR
+              <div className="space-y-4 text-left bg-orange-50/50 p-5 rounded-2xl mb-8">
+                <p className="text-[10px] font-black text-chocolate-light uppercase tracking-widest mb-1">Penting:</p>
+                <ul className="text-xs font-bold text-chocolate space-y-2">
+                  <li className="flex gap-3">
+                    <span className="w-5 h-5 bg-chocolate text-white rounded-full flex items-center justify-center flex-shrink-0 text-[10px]">1</span>
+                    Tunjukkan QR ini ke kasir outlet
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="w-5 h-5 bg-chocolate text-white rounded-full flex items-center justify-center flex-shrink-0 text-[10px]">2</span>
+                    Jika scan gagal, berikan ID Voucher di atas
+                  </li>
+                </ul>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <Button 
+                  onClick={handleDownloadQR}
+                  className="w-full py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-xl shadow-honey/20"
+                >
+                  <Download size={20} /> Simpan ke Galeri
                 </Button>
                 <button 
                   onClick={() => setSelectedClaim(null)}
-                  className="w-full py-2 text-chocolate-light font-bold text-xs"
+                  className="w-full py-3 text-chocolate-light font-bold text-sm hover:text-chocolate transition-colors"
                 >
                   Tutup
                 </button>

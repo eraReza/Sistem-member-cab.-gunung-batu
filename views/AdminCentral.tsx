@@ -38,8 +38,10 @@ const AdminCentral: React.FC = () => {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const [scanResult, setScanResult] = useState<string | null>(null);
+  const [manualCode, setManualCode] = useState('');
   const [redeemStatus, setRedeemStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [scannedClaim, setScannedClaim] = useState<{claim: PromoClaim, promo: Promo, user: User} | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -48,17 +50,22 @@ const AdminCentral: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let scanner: Html5QrcodeScanner | null = null;
     if (activeTab === 'scanner') {
-      const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 }, false);
+      // Initialize scanner only once when tab is active
+      scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 }, false);
       scanner.render((result) => {
         setScanResult(result);
         handleScan(result);
-        scanner.clear();
       }, (error) => {
         // console.warn(error);
       });
-      return () => { scanner.clear(); };
     }
+    return () => { 
+      if (scanner) {
+        scanner.clear().catch(e => console.warn("Failed to clear scanner", e));
+      }
+    };
   }, [activeTab]);
 
   const loadData = async () => {
@@ -75,10 +82,16 @@ const AdminCentral: React.FC = () => {
   };
 
   const handleScan = async (claimId: string) => {
+    if (redeemStatus === 'loading') return;
     setRedeemStatus('loading');
     try {
       const allClaims = await StorageService.getAllClaims();
-      const claim = allClaims.find(c => c.id === claimId);
+      // Try exact match first, then try prefix match for manual input
+      let claim = allClaims.find(c => c.id === claimId);
+      
+      if (!claim && claimId.length >= 6) {
+        claim = allClaims.find(c => c.id.slice(0, 8).toUpperCase() === claimId.toUpperCase());
+      }
       
       if (claim) {
         const allUsers = await StorageService.getUsers();
@@ -113,6 +126,7 @@ const AdminCentral: React.FC = () => {
       alert('✅ Voucher Berhasil Ditukarkan!');
       setScannedClaim(null);
       setScanResult(null);
+      setManualCode('');
       setRedeemStatus('idle');
       loadData();
     } catch (e) {
@@ -159,8 +173,6 @@ const AdminCentral: React.FC = () => {
       setTimeout(() => setConfirmDeleteId(null), 3000);
     }
   };
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleRegisterMember = async () => {
     if (isSubmitting) return;
@@ -215,31 +227,57 @@ const AdminCentral: React.FC = () => {
       </header>
 
       {activeTab === 'scanner' && (
-        <div className="max-w-2xl mx-auto space-y-6">
+        <div className="max-w-4xl mx-auto space-y-6">
           <Card className="p-8 text-center border-4 border-honey rounded-[3rem]">
-            <h3 className="text-2xl font-black mb-4">Scanner Penukaran</h3>
-            <p className="text-sm text-chocolate-light font-bold mb-8">Scan QR Code dari HP pelanggan untuk menukarkan voucher.</p>
+            <h3 className="text-2xl font-black mb-4">Penukaran Voucher</h3>
+            <p className="text-sm text-chocolate-light font-bold mb-8">Scan QR Code atau masukkan kode manual.</p>
             
-            {!scannedClaim ? (
-              <div id="reader" className="overflow-hidden rounded-3xl border-2 border-orange-100 bg-orange-50/30"></div>
-            ) : (
-              <div className="space-y-6 animate-in zoom-in duration-300">
-                <div className="bg-green-50 p-8 rounded-[2.5rem] border-2 border-green-100">
-                  <CheckCircle size={48} className="mx-auto text-green-500 mb-4" />
-                  <h4 className="text-xl font-black text-green-700">Voucher Valid!</h4>
-                  <div className="mt-6 space-y-2 text-left bg-white p-6 rounded-2xl shadow-sm">
-                    <p className="text-xs font-bold text-chocolate-light uppercase tracking-widest">Pelanggan:</p>
-                    <p className="text-lg font-black text-chocolate">{scannedClaim.user.name} ({scannedClaim.user.phone})</p>
-                    <div className="pt-4 border-t border-orange-50">
-                      <p className="text-xs font-bold text-chocolate-light uppercase tracking-widest">Voucher:</p>
-                      <p className="text-lg font-black text-honey-dark">{scannedClaim.promo.title}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <div className="text-[10px] font-black text-chocolate-light uppercase tracking-widest text-left">Metode 1: Scan QR</div>
+                <div id="reader" className="overflow-hidden rounded-3xl border-2 border-orange-100 bg-orange-50/30 min-h-[300px]"></div>
+              </div>
+
+              <div className="space-y-4 flex flex-col justify-center">
+                <div className="text-[10px] font-black text-chocolate-light uppercase tracking-widest text-left">Metode 2: Input Manual</div>
+                <div className="space-y-3">
+                  <Input 
+                    label="Kode Voucher" 
+                    placeholder="Contoh: A1B2C3D4" 
+                    value={manualCode} 
+                    onChange={e => setManualCode(e.target.value.toUpperCase())} 
+                  />
+                  <Button 
+                    onClick={() => handleScan(manualCode)} 
+                    className="w-full py-4 shadow-lg shadow-honey/20"
+                    disabled={!manualCode || redeemStatus === 'loading'}
+                  >
+                    {redeemStatus === 'loading' ? 'MENGECEK...' : 'CEK KODE VOUCHER'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {scannedClaim && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-chocolate/60 backdrop-blur-sm">
+                <Card className="w-full max-w-lg p-8 rounded-[2.5rem] border-4 border-honey animate-in zoom-in duration-300">
+                  <div className="bg-green-50 p-8 rounded-[2.5rem] border-2 border-green-100 mb-6">
+                    <CheckCircle size={48} className="mx-auto text-green-500 mb-4" />
+                    <h4 className="text-xl font-black text-green-700">Voucher Valid!</h4>
+                    <div className="mt-6 space-y-2 text-left bg-white p-6 rounded-2xl shadow-sm">
+                      <p className="text-xs font-bold text-chocolate-light uppercase tracking-widest">Pelanggan:</p>
+                      <p className="text-lg font-black text-chocolate">{scannedClaim.user.name} ({scannedClaim.user.phone})</p>
+                      <div className="pt-4 border-t border-orange-50">
+                        <p className="text-xs font-bold text-chocolate-light uppercase tracking-widest">Voucher:</p>
+                        <p className="text-lg font-black text-honey-dark">{scannedClaim.promo.title}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex gap-4">
-                  <Button onClick={confirmRedeem} className="flex-grow py-4 shadow-xl shadow-honey/20">KONFIRMASI PENUKARAN</Button>
-                  <Button variant="outline" onClick={() => setScannedClaim(null)} className="py-4">BATAL</Button>
-                </div>
+                  <div className="flex gap-4">
+                    <Button onClick={confirmRedeem} className="flex-grow py-4 shadow-xl shadow-honey/20">KONFIRMASI PENUKARAN</Button>
+                    <Button variant="outline" onClick={() => { setScannedClaim(null); setRedeemStatus('idle'); }} className="py-4">BATAL</Button>
+                  </div>
+                </Card>
               </div>
             )}
           </Card>
@@ -377,8 +415,13 @@ const AdminCentral: React.FC = () => {
                     </div>
                     <h4 className="font-black text-xl mb-1">{p.title}</h4>
                     <p className="text-xs text-chocolate-light font-bold mb-4 line-clamp-3">{p.description}</p>
-                    <div className="flex justify-between items-center mt-6 pt-4 border-t border-orange-50">
-                       <Badge color="yellow" className="px-4 py-1.5">LIMIT: {p.claimLimit}x</Badge>
+                    <div className="flex flex-col gap-2 mb-4">
+                      <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-chocolate-light">
+                        <span>Quota: {p.totalQuota || '∞'}</span>
+                        <span>Limit: {p.claimLimit}x</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center mt-auto pt-4 border-t border-orange-50">
                        <Badge color={p.isActive ? 'green' : 'yellow'} className="text-[10px]">{p.isActive ? 'AKTIF' : 'NON-AKTIF'}</Badge>
                     </div>
                   </div>
@@ -407,6 +450,10 @@ const AdminCentral: React.FC = () => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <Input label="Limit Klaim per Member" type="number" value={promoForm.claimLimit || 1} onChange={e => setPromoForm({...promoForm, claimLimit: Number(e.target.value)})} />
+                <Input label="Total Quota (Stok)" type="number" placeholder="Kosongkan jika tak terbatas" value={promoForm.totalQuota || ''} onChange={e => setPromoForm({...promoForm, totalQuota: e.target.value ? Number(e.target.value) : undefined})} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-2">
                   <label className="text-chocolate-light font-semibold text-sm">Status</label>
                   <select 
@@ -418,14 +465,10 @@ const AdminCentral: React.FC = () => {
                     <option value="false">NON-AKTIF</option>
                   </select>
                 </div>
-              </div>
-
-              {promoForm.isFlashSale && (
-                <div className="grid grid-cols-2 gap-4 p-4 bg-red-50 rounded-2xl border border-red-100">
-                  <Input label="Total Quota (Stok)" type="number" value={promoForm.totalQuota || 0} onChange={e => setPromoForm({...promoForm, totalQuota: Number(e.target.value)})} />
+                {promoForm.isFlashSale && (
                   <Input label="Waktu Berakhir" type="datetime-local" value={formatDateForInput(promoForm.endTime)} onChange={e => setPromoForm({...promoForm, endTime: new Date(e.target.value).toISOString()})} />
-                </div>
-              )}
+                )}
+              </div>
 
               <div className="flex items-center gap-3 bg-orange-50 p-4 rounded-2xl">
                 <input 
